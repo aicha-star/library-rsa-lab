@@ -1,0 +1,31 @@
+---
+- name: Install tools for the RSA lab
+  apt:
+    name:
+      - build-essential
+      - libssl-dev
+      - openssl
+      - python3
+    state: present
+    update_cache: yes
+
+- name: Create the lab directory
+  file:
+    path: /home/user/tp
+    state: directory
+    owner: user
+    group: user
+    mode: '0755'
+
+- name: Copy the lab files
+  copy:
+    src: "{{ item }}"
+    dest: "/home/user/tp/{{ item }}"
+    owner: user
+    group: user
+    mode: '0644'
+  loop:
+    - bn_sample.c
+    - valeurs.txt
+    - c0.pem
+    - c1.pem
