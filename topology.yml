@@ -5,7 +5,7 @@ hosts:
     # SEED Ubuntu 20.04 VM used as the student's workstation.
     # !! Adapt "image" to the SEED image registered in YOUR cloud / CyberRangeCZ.
     base_box:
-      image: seed-ubuntu-20.04
+      image: seed
       mgmt_user: ubuntu
     flavor: m1.medium
 
