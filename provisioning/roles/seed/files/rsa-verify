@@ -1,0 +1,213 @@
+#!/usr/bin/env python3
+"""
+rsa-verify — checks your RSA lab work and prints YOUR personal flag.
+
+Usage:  sudo rsa-verify <task>        (task = 0 … 6)
+        sudo rsa-verify list
+
+For each task, write your answer to ~/rsalab/answers/taskN.txt FIRST,
+then run this tool. It tells you exactly what is missing or wrong.
+"""
+import json, os, re, sys
+
+SECRETS     = "/opt/rsalab/secrets.json"
+LAB_DIR     = "/home/ubuntu/rsalab"
+ANSWERS_DIR = os.path.join(LAB_DIR, "answers")
+
+TITLES = {
+    0: "Task 0 — Setup (compile and run the OpenSSL BigNum sample)",
+    1: "Task 1 — Derive the RSA private key (d)",
+    2: "Task 2 — RSA Encryption",
+    3: "Task 3 — RSA Decryption",
+    4: "Task 4 — Digital Signature (sign)",
+    5: "Task 5 — Signature Verification",
+    6: "Task 6 — Manually verify an X.509 certificate",
+}
+
+# ─── helpers ─────────────────────────────────────────────────────────────────
+
+def _read(task):
+    p = os.path.join(ANSWERS_DIR, f"task{task}.txt")
+    if not os.path.exists(p):
+        return None
+    txt = open(p).read().strip()
+    # ignore comment lines
+    lines = [l for l in txt.splitlines() if not l.strip().startswith("#")]
+    return "\n".join(lines).strip() or None
+
+def _nhex(s):
+    """Normalize a hex string: strip whitespace/colons/0x, uppercase, strip leading zeros."""
+    s = re.sub(r'[\s:\n]', '', s)
+    s = re.sub(r'^0[xX]', '', s)
+    return (s.lstrip('0') or '0').upper()
+
+def _report(results):
+    all_ok = True
+    for ok, msg in results:
+        mark = " OK " if ok else "FAIL"
+        print(f"  [{mark}] {msg}")
+        all_ok = all_ok and ok
+    return all_ok
+
+# ─── checks ──────────────────────────────────────────────────────────────────
+
+def check0(_s):
+    sample_bin = os.path.join(LAB_DIR, "bn_sample")
+    rsa_bin    = os.path.join(LAB_DIR, "rsa_lab")
+    ans        = _read(0)
+    has_hex    = bool(re.search(r'[0-9A-Fa-f]{16,}', ans or ""))
+    return [
+        (os.path.exists(sample_bin),
+         f"bn_sample has been compiled  ({sample_bin})"),
+        (os.path.exists(rsa_bin),
+         f"rsa_lab has been compiled    ({rsa_bin})"),
+        (bool(ans), "answers/task0.txt exists and is not empty"),
+        (has_hex,   "task0.txt contains BigNum hex output (output of ./bn_sample)"),
+    ]
+
+def check1(s):
+    exp = s["answers"]["1"]
+    ans = _read(1)
+    if not ans:
+        return [(False, "Write your computed d (hex) to ~/rsalab/answers/task1.txt")]
+    return [(_nhex(ans) == _nhex(exp),
+             f"Your d value matches the expected result  (~{len(_nhex(exp))} hex chars)")]
+
+def check2(s):
+    exp = s["answers"]["2"]
+    ans = _read(2)
+    if not ans:
+        return [(False, "Write your computed ciphertext C (hex) to ~/rsalab/answers/task2.txt")]
+    return [(_nhex(ans) == _nhex(exp), "Your ciphertext C matches the expected result")]
+
+def check3(s):
+    expected_flag = s["answers"]["3"]   # the plaintext IS the flag
+    ans = _read(3)
+    if not ans:
+        return [(False, "Write the decrypted hex string to ~/rsalab/answers/task3.txt")]
+    # Decode hex → ASCII
+    try:
+        decoded = bytes.fromhex(_nhex(ans)).decode("utf-8", errors="replace")
+    except Exception as exc:
+        return [(False, f"Cannot decode your hex answer as UTF-8: {exc}")]
+    return [(decoded == expected_flag,
+             "The decrypted plaintext matches the secret message"
+             + (" ✓" if decoded == expected_flag else " — check your decryption"))]
+
+def check4(s):
+    exp = s["answers"]["4"]
+    ans = _read(4)
+    if not ans:
+        return [(False, "Write your computed signature S (hex) to ~/rsalab/answers/task4.txt")]
+    return [(_nhex(ans) == _nhex(exp), "Your signature S matches the expected result")]
+
+def check5(s):
+    exp_parts = s["answers"]["5"].split(":")   # e.g. ["VALID", "INVALID"]
+    ans = _read(5)
+    if not ans:
+        return [(False,
+                 "Write TWO lines to ~/rsalab/answers/task5.txt:\n"
+                 "  Line 1: verification result of the original S   (VALID or INVALID)\n"
+                 "  Line 2: verification result of the corrupted S' (VALID or INVALID)")]
+    lines = [l.strip().upper() for l in ans.splitlines() if l.strip()]
+    if len(lines) < 2:
+        return [(False, "task5.txt must have exactly 2 lines (original result, then corrupted result)")]
+    return [
+        (lines[0] == exp_parts[0],
+         f"Original S   verification: expected {exp_parts[0]}, got {lines[0]}"),
+        (lines[1] == exp_parts[1],
+         f"Corrupted S' verification: expected {exp_parts[1]}, got {lines[1]}"),
+    ]
+
+def check6(s):
+    exp_hash = s["answers"]["6"]
+    if exp_hash == "TBD":
+        return [(False, "Internal: cert hash not yet stored — tell your instructor.")]
+    c0 = os.path.join(LAB_DIR, "task6", "c0.pem")
+    c1 = os.path.join(LAB_DIR, "task6", "c1.pem")
+    ans = _read(6)
+    results = [
+        (os.path.exists(c0), f"~/rsalab/task6/c0.pem exists (server certificate)"),
+        (os.path.exists(c1), f"~/rsalab/task6/c1.pem exists (CA certificate)"),
+    ]
+    if not ans:
+        results.append((False,
+            "Write the SHA-256 hash of the cert body to ~/rsalab/answers/task6.txt\n"
+            "  Commands:\n"
+            "    openssl asn1parse -i -in ~/rsalab/task6/c0.pem -strparse 4 -out /tmp/c0_body.bin -noout\n"
+            "    sha256sum /tmp/c0_body.bin"))
+        return results
+    # sha256sum output is "hash  filename" or just "hash"
+    student_hash = ans.split()[0].strip()
+    results.append((_nhex(student_hash) == _nhex(exp_hash),
+                    "SHA-256 hash of the certificate body matches"))
+    return results
+
+CHECKS = {0: check0, 1: check1, 2: check2,
+          3: check3, 4: check4, 5: check5, 6: check6}
+
+# ─── main ─────────────────────────────────────────────────────────────────────
+
+def main(argv):
+    if len(argv) != 2 or argv[1] not in [str(n) for n in CHECKS] + ["list"]:
+        print(__doc__)
+        for n in sorted(TITLES):
+            print(f"  {n}  {TITLES[n]}")
+        return 0 if len(argv) == 2 and argv[1] == "list" else 2
+
+    if argv[1] == "list":
+        for n in sorted(TITLES):
+            print(f"  {n}  {TITLES[n]}")
+        return 0
+
+    task = int(argv[1])
+    if os.geteuid() != 0:
+        print(f"Please run:  sudo rsa-verify {task}")
+        return 2
+
+    try:
+        secrets = json.loads(open(SECRETS).read())
+        flag    = secrets["flags"][str(task)]
+    except Exception as exc:
+        print(f"Internal error: cannot read the flag store ({exc}). Tell your instructor.")
+        return 3
+
+    print(f"\n== {TITLES[task]} ==\n")
+    try:
+        results = CHECKS[task](secrets)
+    except Exception as exc:
+        print(f"[ERROR] {exc}")
+        return 1
+
+    all_ok = _report(results)
+    print()
+
+    if not all_ok:
+        print("Not validated yet — fix the [FAIL] lines above and run again.")
+        return 1
+
+    # ── Task 3 special case: the flag IS the decrypted plaintext ──────────────
+    if task == 3:
+        try:
+            decoded = bytes.fromhex(_nhex(_read(3))).decode("utf-8")
+        except Exception:
+            decoded = flag
+        bar = "=" * (len(decoded) + 18)
+        print(bar)
+        print("  TASK 3 VALIDATED")
+        print(f"  Decrypted message : {decoded}")
+        print(f"  This IS your flag — submit it to CyberRangeCZ exactly as shown.")
+        print(bar)
+        return 0
+
+    bar = "=" * (len(flag) + 16)
+    print(bar)
+    print(f"  TASK {task} VALIDATED")
+    print(f"  Your flag :  {flag}")
+    print(bar)
+    print("Copy it EXACTLY into the answer box of CyberRangeCZ. Valid for your sandbox only.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

@@ -1,0 +1,25 @@
+This project reuses the following works:
+
+1. SEED Labs - "RSA Public-Key Encryption and Signature Lab"
+   Copyright © 2018 by Wenliang Du.
+   Licensed under Creative Commons Attribution-NonCommercial-ShareAlike 4.0 (CC BY-NC-SA 4.0).
+   Source: https://github.com/seed-labs/seed-labs/tree/master/category-crypto/Crypto_RSA
+   Used for: lab tasks (Tasks 1-6), questions Q0-Q11, bn_sample.c (verbatim),
+   the structure of rsa_lab.c, the fixed parameters of Task 5 (Alice's keys).
+   This game definition is therefore distributed under CC BY-NC-SA 4.0.
+
+2. library-junior-hacker (CyberRangeCZ)
+   Copyright (c) 2020 Miriam Gáliková; Copyright (c) 2025 CyberSecurity Hub, z.s.
+   Source: https://github.com/cyberrangecz/library-junior-hacker
+   Licensed under MIT (code) / CC BY 4.0 (game design).
+   Used for: topology structure, playbook format, training.json format.
+
+3. ansible-role-user-access, ansible-role-chrony, ansible-role-sandbox-logging
+   Source: https://github.com/cyberrangecz/
+   Used unmodified as provisioning role dependencies.
+
+New content of this repository (topology, variables.yml, training.json structure,
+Ansible role "seed", gen_params.py, rsa-verify, store_cert_hash.py, Makefile,
+the Jinja-free parameter generation approach) is original work, licensed MIT (code).
+The lab texts, task descriptions and quiz questions are adapted from the SEED lab above
+and are therefore distributed under CC BY-NC-SA 4.0.

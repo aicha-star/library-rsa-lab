@@ -1,0 +1,34 @@
+# APG variables: https://docs.platform.cyberrange.cz/user-guide-advanced/sandboxes/apg-variables/
+# One random value of EACH variable is generated PER SANDBOX (= per student).
+#
+# flag_t3_decrypt is special: its value IS the RSA-encrypted secret message.
+# The student decrypts it with their C program and submits the plaintext directly.
+# All other flags are released by the verifier (rsa-verify) once the computed answer is correct.
+
+flag_t0_setup:
+    type: password
+    length: 16
+
+flag_t1_privkey:
+    type: password
+    length: 16
+
+flag_t2_encrypt:
+    type: password
+    length: 16
+
+flag_t3_decrypt:
+    type: text
+    length: 12
+
+flag_t4_sign:
+    type: password
+    length: 16
+
+flag_t5_verify:
+    type: password
+    length: 16
+
+flag_t6_cert:
+    type: password
+    length: 16

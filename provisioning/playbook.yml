@@ -1,0 +1,37 @@
+---
+# RSA Public-Key Lab on CyberRangeCZ.
+# flag_t0 … flag_t6 come from variables.yml (generated per sandbox by APG).
+
+- name: Configure the student workstation (SEED Ubuntu)
+  hosts: seed
+  become: true
+  roles:
+    - role: user-access
+      user_access_username: ubuntu
+      user_access_password: ubuntu
+      user_access_sudo: True
+    - role: seed
+      flag_t0: "{{ flag_t0_setup }}"
+      flag_t1: "{{ flag_t1_privkey }}"
+      flag_t2: "{{ flag_t2_encrypt }}"
+      flag_t3: "{{ flag_t3_decrypt }}"
+      flag_t4: "{{ flag_t4_sign }}"
+      flag_t5: "{{ flag_t5_verify }}"
+      flag_t6: "{{ flag_t6_cert }}"
+    - chrony
+
+- name: Set up sandbox logging
+  hosts:
+    - routers
+    - hosts
+  become: yes
+  vars:
+    sandbox_name: rsa-lab
+    central_syslog_ip: 127.0.0.1
+  roles:
+    - role: sandbox-logging
+      slf_destination_port: '{% if hostvars["man"] is defined -%}514{%- else -%}515{%- endif %}'
+      slf_destination: '{% if hostvars["man"] is defined -%}{{ hostvars["man"].ansible_host }}{%- else -%}{{ central_syslog_ip }}{%- endif %}'
+      slf_sandbox_id:   "{{ global_sandbox_id | default(student_id) | default(0) }}"
+      slf_sandbox_name: '{{ global_sandbox_name | default(sandbox_name) }}'
+      slf_pool_id:      '{{ global_pool_id | default(None) }}'

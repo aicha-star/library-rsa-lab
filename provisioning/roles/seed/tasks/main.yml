@@ -1,0 +1,197 @@
+---
+# SEED VM setup for the RSA Public-Key lab.
+# This role:
+#  1. Installs libssl-dev (needed to compile the C BigNum programs)
+#  2. Creates the lab directory structure
+#  3. Deploys starter files (C sources, Makefile, verifier)
+#  4. Runs gen_params.py to generate unique RSA parameters per sandbox
+#  5. Generates a CA + server X.509 cert pair for Task 6
+#  6. Protects the flag store with strict file permissions
+
+- name: Update apt cache
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Install build tools and OpenSSL development headers
+  apt:
+    name:
+      - gcc
+      - make
+      - libssl-dev
+      - openssl
+    state: present
+
+# ── Lab directory structure ──────────────────────────────────────────────────
+- name: Create the lab root directory
+  file:
+    path: "{{ rsa_lab_dir }}"
+    state: directory
+    owner: "{{ rsa_user }}"
+    group: "{{ rsa_user }}"
+    mode: '0755'
+
+- name: Create the answers directory (student-writable)
+  file:
+    path: "{{ rsa_lab_dir }}/answers"
+    state: directory
+    owner: "{{ rsa_user }}"
+    group: "{{ rsa_user }}"
+    mode: '0755'
+
+- name: Create the Task 6 certificates directory
+  file:
+    path: "{{ rsa_lab_dir }}/task6"
+    state: directory
+    owner: "{{ rsa_user }}"
+    group: "{{ rsa_user }}"
+    mode: '0755'
+
+- name: Create the protected secrets directory (root-only)
+  file:
+    path: "{{ rsa_secrets_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+
+# ── Deploy C starter files ───────────────────────────────────────────────────
+- name: Deploy lab source files
+  copy:
+    src: "{{ item }}"
+    dest: "{{ rsa_lab_dir }}/{{ item }}"
+    owner: "{{ rsa_user }}"
+    group: "{{ rsa_user }}"
+    mode: '0644'
+  loop:
+    - bn_sample.c
+    - rsa_lab.c
+    - Makefile
+
+- name: Deploy the parameter generator
+  copy:
+    src: gen_params.py
+    dest: "{{ rsa_secrets_dir }}/gen_params.py"
+    owner: root
+    group: root
+    mode: '0700'
+
+# ── Generate unique RSA parameters ──────────────────────────────────────────
+- name: Generate unique RSA parameters for this sandbox
+  command: >
+    python3 {{ rsa_secrets_dir }}/gen_params.py
+    --flag0 "{{ flag_t0 }}"
+    --flag1 "{{ flag_t1 }}"
+    --flag2 "{{ flag_t2 }}"
+    --flag3 "{{ flag_t3 }}"
+    --flag4 "{{ flag_t4 }}"
+    --flag5 "{{ flag_t5 }}"
+    --flag6 "{{ flag_t6 }}"
+  no_log: true   # prevents flags from appearing in Ansible output
+
+- name: Set ownership of params.txt (student-readable)
+  file:
+    path: "{{ rsa_lab_dir }}/params.txt"
+    owner: "{{ rsa_user }}"
+    group: "{{ rsa_user }}"
+    mode: '0644'
+
+- name: Set ownership of answer template files
+  file:
+    path: "{{ rsa_lab_dir }}/answers"
+    owner: "{{ rsa_user }}"
+    group: "{{ rsa_user }}"
+    mode: '0755'
+    recurse: yes
+
+# ── Generate Task 6 X.509 certificate pair (unique per sandbox) ──────────────
+- name: Generate CA private key and self-signed CA certificate
+  shell: |
+    cd "{{ rsa_lab_dir }}/task6"
+    openssl genrsa -out ca_priv.key 2048 2>/dev/null
+    openssl req -new -x509 -key ca_priv.key -out c1.pem -days 3650 -sha256 \
+      -subj "/C=FR/ST=IDF/O=RSA Lab/CN=RSA Lab Root CA" 2>/dev/null
+  args:
+    creates: "{{ rsa_lab_dir }}/task6/c1.pem"
+
+- name: Generate server private key, CSR and CA-signed server certificate
+  shell: |
+    cd "{{ rsa_lab_dir }}/task6"
+    openssl genrsa -out server_priv.key 2048 2>/dev/null
+    openssl req -new -key server_priv.key -out server.csr \
+      -subj "/C=FR/ST=IDF/O=RSA Lab Server/CN=lab.example.com" 2>/dev/null
+    openssl x509 -req -in server.csr -CA c1.pem -CAkey ca_priv.key \
+      -CAcreateserial -out c0.pem -days 3650 -sha256 2>/dev/null
+  args:
+    creates: "{{ rsa_lab_dir }}/task6/c0.pem"
+
+- name: Remove private keys from the lab directory (student should only use the certs)
+  file:
+    path: "{{ rsa_lab_dir }}/task6/{{ item }}"
+    state: absent
+  loop:
+    - ca_priv.key
+    - server_priv.key
+    - server.csr
+    - c1.srl
+
+- name: Set cert file permissions
+  file:
+    path: "{{ rsa_lab_dir }}/task6/{{ item }}"
+    owner: "{{ rsa_user }}"
+    group: "{{ rsa_user }}"
+    mode: '0644'
+  loop:
+    - c0.pem
+    - c1.pem
+
+- name: Deploy the cert-hash helper script
+  copy:
+    src: store_cert_hash.py
+    dest: "{{ rsa_secrets_dir }}/store_cert_hash.py"
+    owner: root
+    group: root
+    mode: '0700'
+
+- name: Compute SHA-256 of the Task 6 cert body and store it in secrets.json
+  command: >
+    python3 {{ rsa_secrets_dir }}/store_cert_hash.py
+    {{ rsa_lab_dir }}/task6/c0.pem
+    {{ rsa_secrets_dir }}/secrets.json
+
+# ── Install verifier tool ────────────────────────────────────────────────────
+- name: Install the rsa-verify tool
+  copy:
+    src: rsa-verify
+    dest: /usr/local/bin/rsa-verify
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Allow the student to run ONLY the verifier as root (via sudoers)
+  copy:
+    dest: /etc/sudoers.d/rsa-verify
+    content: "{{ rsa_user }} ALL=(root) NOPASSWD: /usr/local/bin/rsa-verify\n"
+    owner: root
+    group: root
+    mode: '0440'
+    validate: 'visudo -cf %s'
+
+- name: Add convenience alias for rsa-verify to .bashrc
+  blockinfile:
+    path: "/home/{{ rsa_user }}/.bashrc"
+    create: yes
+    owner: "{{ rsa_user }}"
+    group: "{{ rsa_user }}"
+    marker: "# {mark} RSA LAB ALIASES"
+    block: |
+      alias rsaverify='sudo rsa-verify'
+      alias params='cat ~/rsalab/params.txt'
+
+- name: Restrict the secrets directory to root only
+  file:
+    path: "{{ rsa_secrets_dir }}"
+    owner: root
+    group: root
+    mode: '0700'
+    recurse: yes

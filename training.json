@@ -1,0 +1,488 @@
+{
+  "title": "RSA Public-Key Encryption & Signature Lab (SEED Labs TP)",
+  "description": "TP de cryptographie sur l'algorithme RSA : implémentation en C avec OpenSSL BigNum de la dérivation de clé privée, du chiffrement, du déchiffrement, de la signature numérique et de la vérification de certificat X.509. Paramètres RSA uniques par étudiant (variant sandboxes). Noté sur 20 (plateforme ×10 = 200 points).",
+  "prerequisites": [
+    "Notions de cryptographie asymétrique (cours)",
+    "Bases du langage C (compilation gcc, pointeurs)",
+    "Ligne de commande Linux de base"
+  ],
+  "outcomes": [
+    "Calculer la clé privée RSA avec BN_mod_inverse",
+    "Chiffrer et déchiffrer des messages avec BN_mod_exp",
+    "Générer et vérifier une signature numérique RSA",
+    "Vérifier manuellement un certificat X.509 avec OpenSSL et un programme C"
+  ],
+  "state": "UNRELEASED",
+  "show_stepper_bar": true,
+  "levels": [
+    {
+      "title": "Bienvenue et règles",
+      "level_type": "INFO_LEVEL",
+      "order": 0,
+      "estimated_duration": 0,
+      "minimal_possible_solve_time": null,
+      "content": "# RSA Public-Key Encryption & Signature Lab\n\n**Lisez cette page avant de commencer — elle explique la notation et les règles.**\n\n## Contexte pédagogique\nRSA est l'un des premiers cryptosystèmes à clé publique ; il est à la base du HTTPS, des signatures numériques et des certificats X.509. Dans ce TP vous allez **implémenter vous-même** chaque étape de l'algorithme RSA en C, en utilisant la bibliothèque OpenSSL BigNum — pas de boîte noire, tout le calcul est visible.\n\n## Votre environnement\nUn seul poste de travail : la VM SEED Ubuntu (`seed`). Toutes les tâches s'effectuent en local, aucune connexion réseau n'est nécessaire pour les tâches 0 à 5. La tâche 6 utilise des certificats déjà présents dans `~/rsalab/task6/`.\n\n## Paramètres uniques par sandbox (anti-triche)\nChaque étudiant dispose de paramètres RSA (p, q, n, d) **générés aléatoirement** pour son sandbox. Vos p et q sont différents de ceux de vos camarades, donc vos réponses (d, C, S…) sont différentes. Un flag copié sur un camarade sera refusé par la plateforme.\n\nLa **Task 3** est spéciale : le message chiffré C contient VOTRE flag. Déchiffrer C avec votre propre clé vous donne directement le texte à soumettre.\n\n## Comment obtenir un flag\nPour chaque tâche :\n1. Lisez VOS paramètres : `cat ~/rsalab/params.txt`\n2. Copiez les valeurs hex dans votre programme C, compilez, exécutez.\n3. Écrivez la réponse dans `~/rsalab/answers/taskN.txt`\n4. Lancez le vérificateur : `sudo rsa-verify N`\n5. Le vérificateur imprime votre flag personnel si la réponse est correcte.\n6. Soumettez ce flag dans la boîte de réponse CyberRangeCZ.\n\n## Notation : 20 / 20\nLa plateforme affiche les scores **×10** : **200 points = 20/20**.\n\n| Niveau | Points | /20 |\n|---|---|---|\n| Task 0 — Mise en place (compiler le programme exemple) | 10 | 1 |\n| Task 1 — Calculer la clé privée d | 30 | 3 |\n| Task 2 — Chiffrer un message | 20 | 2 |\n| Task 3 — Déchiffrer un message (flag = texte déchiffré) | 30 | 3 |\n| Task 4 — Signer un message | 30 | 3 |\n| Task 5 — Vérifier une signature | 30 | 3 |\n| Task 6 — Vérifier un certificat X.509 | 20 | 2 |\n| Quiz final (6 × 5 pts) | 30 | 3 |\n| **Total** | **200** | **20** |\n\n**Pénalités indice :** −5 à −20 points plateforme = **−0,5 à −2 / 20**.\nAfficher la solution complète donne **0** pour ce niveau.\n\n## Rappels\n- Travaillez seul. La plateforme enregistre vos actions.\n- Remettez également un **rapport de TP** à votre enseignant (screenshots + explications de code).\n- Code sans explication = 0 crédit dans le rapport."
+    },
+    {
+      "title": "Accès au sandbox",
+      "level_type": "ACCESS_LEVEL",
+      "order": 1,
+      "estimated_duration": 0,
+      "minimal_possible_solve_time": null,
+      "passkey": "start",
+      "cloud_content": "Connectez-vous à votre sandbox pour démarrer.\n\n### Connexion\n1. Dans la topologie à droite, clic droit sur **`seed`** → **`Open GUI`**.\n2. Identifiez-vous : utilisateur **`ubuntu`**, mot de passe **`ubuntu`**.\n\n> Toutes les tâches s'effectuent **directement** sur cette machine. Soumettez **`start`** une fois connecté.",
+      "local_content": "Ce sandbox n'a pas été testé en mode local."
+    },
+    {
+      "title": "Task 0 — Mise en place",
+      "level_type": "TRAINING_LEVEL",
+      "order": 2,
+      "estimated_duration": 10,
+      "minimal_possible_solve_time": null,
+      "answer": null,
+      "answer_variable_name": "flag_t0_setup",
+      "content": "# Task 0 — Mise en place : compiler et exécuter le programme exemple\n\nAvant de commencer les calculs RSA, vérifiez que votre environnement est opérationnel.\n\n## À faire\n1. Ouvrez un terminal et allez dans le répertoire du lab :\n   ```\n   cd ~/rsalab\n   ```\n2. Compilez les deux programmes :\n   ```\n   make\n   ```\n3. Exécutez le programme exemple de la documentation OpenSSL BigNum :\n   ```\n   ./bn_sample\n   ```\n4. Copiez sa sortie dans le fichier réponse :\n   ```\n   ./bn_sample > ~/rsalab/answers/task0.txt\n   ```\n5. Obtenez votre flag :\n   ```\n   sudo rsa-verify 0\n   ```\n\n## Pour votre rapport\n**Q0.** Expliquez ce que calcule `bn_sample.c` : que représentent `a`, `b`, `n`, et les deux opérations effectuées ?",
+      "solution": "```bash\ncd ~/rsalab && make\n./bn_sample > ~/rsalab/answers/task0.txt\nsudo rsa-verify 0\n```\nVotre flag est : **`${ANSWER}`**",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "Le `make` échoue",
+          "content": "Vérifiez que `libssl-dev` est installé : `dpkg -l libssl-dev`. Si absent : `sudo apt install libssl-dev`. Puis relancez `make`.",
+          "hint_penalty": 5,
+          "order": 0
+        },
+        {
+          "title": "La commande `bn_sample` n'existe pas",
+          "content": "`make` doit produire deux binaires : `bn_sample` et `rsa_lab`. Vérifiez les messages d'erreur de `make`. Le compilateur est `gcc` ; testez `gcc --version`.",
+          "hint_penalty": 10,
+          "order": 1
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 10,
+      "variant_answers": true,
+      "reference_solution": [],
+      "mitre_techniques": [],
+      "expected_commands": [],
+      "commands_required": false
+    },
+    {
+      "title": "Task 1 — Calculer la clé privée RSA (d)",
+      "level_type": "TRAINING_LEVEL",
+      "order": 3,
+      "estimated_duration": 15,
+      "minimal_possible_solve_time": null,
+      "answer": null,
+      "answer_variable_name": "flag_t1_privkey",
+      "content": "# Task 1 — Calculer la clé privée RSA\n\n## Rappel théorique\nRSA repose sur le fait que, donné un module `n = p × q`, il est facile de calculer\n`φ(n) = (p-1)(q-1)`, mais pratiquement impossible de factoriser `n` si p et q sont grands.\nLa clé privée `d` est l'**inverse modulaire** de `e` modulo `φ(n)` :\n\n```\ne × d ≡ 1  (mod φ(n))\n```\n\n## À faire\n1. Lisez vos paramètres uniques :\n   ```\n   cat ~/rsalab/params.txt\n   ```\n2. Ouvrez `~/rsalab/rsa_lab.c` et trouvez la section **TASK 1**.\n3. Remplacez `REPLACE_WITH_YOUR_P` et `REPLACE_WITH_YOUR_Q` par vos valeurs.\n4. Décommentez la ligne `BN_mod_inverse(d, e, phi, ctx);`.\n5. Compilez et exécutez :\n   ```\n   make rsa_lab && ./rsa_lab 1\n   ```\n6. Copiez la valeur imprimée de `d` dans `~/rsalab/answers/task1.txt`.\n7. Vérifiez et obtenez votre flag :\n   ```\n   sudo rsa-verify 1\n   ```\n\n> Le fichier `params.txt` contient aussi `d` pour vous permettre de **vérifier** votre résultat avant de soumettre.\n\n## Pour votre rapport\n**Q1.** Quelle est la fonction `BN_mod_inverse` ? Quel algorithme implémente-t-elle (nom, principe) ?\n**Q2.** Pourquoi e = 65537 (0x10001) est-il un choix courant pour l'exposant public ?",
+      "solution": "```c\n// Dans task1() de rsa_lab.c :\nBN_hex2bn(&p, \"VOTRE_P\");   // copier depuis params.txt\nBN_hex2bn(&q, \"VOTRE_Q\");\nBN_hex2bn(&e, \"010001\");\n// ...\nBN_sub(p1, p, one);  BN_sub(q1, q, one);  BN_mul(phi, p1, q1, ctx);\nBN_mod_inverse(d, e, phi, ctx);\n```\n```bash\nmake rsa_lab && ./rsa_lab 1\n# copier d dans answers/task1.txt\nsudo rsa-verify 1\n```\nVotre flag est : **`${ANSWER}`**",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "Quelle API OpenSSL calcule l'inverse modulaire ?",
+          "content": "`BN_mod_inverse(result, a, m, ctx)` calcule `a⁻¹ mod m`. Ici `a = e` et `m = phi`. L'API est documentée sur https://linux.die.net/man/3/bn",
+          "hint_penalty": 5,
+          "order": 0
+        },
+        {
+          "title": "Comment calculer φ(n) = (p-1)(q-1) avec les BIGNUMs ?",
+          "content": "Utilisez `BN_sub(p1, p, one)` pour calculer `p-1`, idem pour `q-1`, puis `BN_mul(phi, p1, q1, ctx)` pour le produit. La variable `one` est initialisée avec `BN_one(one)`.",
+          "hint_penalty": 10,
+          "order": 1
+        },
+        {
+          "title": "Le vérificateur dit FAIL",
+          "content": "Comparez votre `d` avec la valeur affichée dans `params.txt`. S'ils diffèrent, vérifiez que vous avez bien copié p et q (sans espaces ni '0x'). La réponse doit être la valeur hex brute de d.",
+          "hint_penalty": 15,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 30,
+      "variant_answers": true,
+      "reference_solution": [],
+      "mitre_techniques": [],
+      "expected_commands": [],
+      "commands_required": false
+    },
+    {
+      "title": "Task 2 — Chiffrer un message avec RSA",
+      "level_type": "TRAINING_LEVEL",
+      "order": 4,
+      "estimated_duration": 15,
+      "minimal_possible_solve_time": null,
+      "answer": null,
+      "answer_variable_name": "flag_t2_encrypt",
+      "content": "# Task 2 — Chiffrer un message avec RSA\n\n## Rappel\nLe chiffrement RSA applique la clé publique `(e, n)` au message `M` :\n\n```\nC = Mᵉ mod n\n```\n\n## À faire\n1. Trouvez la section **TASK 2** dans `rsa_lab.c`.\n2. Remplacez `REPLACE_WITH_YOUR_N` par votre `n` (depuis `params.txt`).\n3. Décommentez `BN_mod_exp(C, M, e, n, ctx);`.\n4. Compilez et exécutez :\n   ```\n   make rsa_lab && ./rsa_lab 2\n   ```\n5. Copiez la valeur de `C` dans `~/rsalab/answers/task2.txt`.\n6. Obtenez votre flag :\n   ```\n   sudo rsa-verify 2\n   ```\n\n> Le message `M = \"A top secret!\"` a déjà été converti en hex pour vous : `4120746f702073656372657421`.\n> La commande Python équivalente : `python3 -c 'print(\"A top secret!\".encode(\"utf-8\").hex())'`\n\n## Pour votre rapport\n**Q3.** Pourquoi obtient-on un chiffré C **différent** de celui de vos camarades pour le même message \"A top secret!\" ?",
+      "solution": "```c\n// Dans task2() de rsa_lab.c :\nBN_hex2bn(&M, \"4120746f702073656372657421\");\nBN_hex2bn(&e, \"010001\");\nBN_hex2bn(&n, \"VOTRE_N\");\nBN_mod_exp(C, M, e, n, ctx);\n```\n```bash\nmake rsa_lab && ./rsa_lab 2\nsudo rsa-verify 2\n```\nVotre flag est : **`${ANSWER}`**",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "Quelle API OpenSSL fait aˣ mod n ?",
+          "content": "`BN_mod_exp(res, a, x, n, ctx)` calcule `a^x mod n`. Ici `a=M`, `x=e`, `n=n`.",
+          "hint_penalty": 5,
+          "order": 0
+        },
+        {
+          "title": "Résultat inattendu ou erreur de compilation",
+          "content": "Vérifiez que `REPLACE_WITH_YOUR_N` a bien été remplacé par la valeur hexadécimale de n (sans espace ni '0x'). Recompilez avec `make rsa_lab`.",
+          "hint_penalty": 10,
+          "order": 1
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 20,
+      "variant_answers": true,
+      "reference_solution": [],
+      "mitre_techniques": [],
+      "expected_commands": [],
+      "commands_required": false
+    },
+    {
+      "title": "Task 3 — Déchiffrer un message (votre flag est le texte déchiffré)",
+      "level_type": "TRAINING_LEVEL",
+      "order": 5,
+      "estimated_duration": 15,
+      "minimal_possible_solve_time": null,
+      "answer": null,
+      "answer_variable_name": "flag_t3_decrypt",
+      "content": "# Task 3 — Déchiffrer un message RSA\n\n## Rappel\nLe déchiffrement utilise la clé privée `(d, n)` :\n\n```\nM = Cᵈ mod n\n```\n\n## À faire\n1. Trouvez la section **TASK 3** dans `rsa_lab.c`.\n2. Remplacez les trois `REPLACE_...` par vos valeurs `C`, `d` et `n` (depuis `params.txt`).\n3. Décommentez `BN_mod_exp(M, C, d, n, ctx);`.\n4. Compilez et exécutez :\n   ```\n   make rsa_lab && ./rsa_lab 3\n   ```\n5. Le programme affiche le texte déchiffré en clair. **Ce texte est votre flag.**\n6. Copiez le hex de M dans `~/rsalab/answers/task3.txt`.\n7. Obtenez la confirmation :\n   ```\n   sudo rsa-verify 3\n   ```\n8. **Soumettez le texte ASCII imprimé** (pas le hex) comme réponse à la plateforme.\n\n## Pour votre rapport\n**Q4.** Que se passe-t-il si on déchiffre avec un d incorrect (par exemple celui d'un camarade) ? Essayez et expliquez.\n**Q5.** Vérifiez que `Mᵉ mod n` redonne `C`. Que prouve cette propriété ?",
+      "solution": "```c\nBN_hex2bn(&C, \"VOTRE_C\");   // depuis params.txt\nBN_hex2bn(&d, \"VOTRE_D\");\nBN_hex2bn(&n, \"VOTRE_N\");\nBN_mod_exp(M, C, d, n, ctx);\n```\n```bash\nmake rsa_lab && ./rsa_lab 3\n# lire le texte ASCII imprimé → c'est votre flag\nsudo rsa-verify 3    # confirme et affiche le flag\n```\nVotre flag (le texte déchiffré) est : **`${ANSWER}`**",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "Le texte déchiffré semble du charabia",
+          "content": "Vérifiez que vous avez bien copié C, d et n depuis **vos** `params.txt` (pas ceux d'un exemple du cours). Chaque sandbox a un C différent.",
+          "hint_penalty": 5,
+          "order": 0
+        },
+        {
+          "title": "Comment convertir le hex en ASCII ?",
+          "content": "Le programme `rsa_lab` le fait pour vous : cherchez la ligne `M (ASCII attempt)`. Vous pouvez aussi utiliser Python : `python3 -c 'print(bytes.fromhex(\"VOTRE_HEX\").decode())'`",
+          "hint_penalty": 10,
+          "order": 1
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 30,
+      "variant_answers": true,
+      "reference_solution": [],
+      "mitre_techniques": [],
+      "expected_commands": [],
+      "commands_required": false
+    },
+    {
+      "title": "Task 4 — Signature numérique RSA",
+      "level_type": "TRAINING_LEVEL",
+      "order": 6,
+      "estimated_duration": 15,
+      "minimal_possible_solve_time": null,
+      "answer": null,
+      "answer_variable_name": "flag_t4_sign",
+      "content": "# Task 4 — Signature numérique RSA\n\n## Rappel\nSigner un message revient à **chiffrer avec la clé privée** :\n\n```\nS = Mᵈ mod n\n```\n\nLa vérification utilise la clé publique : `Sᵉ mod n == M`.\n\n## À faire\n1. Trouvez la section **TASK 4** dans `rsa_lab.c`.\n2. Remplacez les `REPLACE_...` par vos `d` et `n`.\n3. Décommentez les deux `BN_mod_exp(...)`.\n4. Compilez et exécutez :\n   ```\n   make rsa_lab && ./rsa_lab 4\n   ```\n5. Observez les deux signatures `S ($2000)` et `S' ($3000)`.\n6. Copiez la valeur de `S ($2000)` dans `~/rsalab/answers/task4.txt`.\n7. Obtenez votre flag :\n   ```\n   sudo rsa-verify 4\n   ```\n\n## Pour votre rapport\n**Q6.** Comparez les deux signatures S et S'. Qu'observez-vous, alors que les deux messages ne diffèrent que d'un caractère ('2' → '3') ?\n**Q7.** Pourquoi signe-t-on habituellement le **hachage** du message plutôt que le message lui-même ?",
+      "solution": "```c\nBN_hex2bn(&M,  \"49206f776520796f75202432303030302e\");  // $2000\nBN_hex2bn(&Mb, \"49206f776520796f75202433303030302e\");  // $3000\nBN_hex2bn(&d, \"VOTRE_D\"); BN_hex2bn(&n, \"VOTRE_N\");\nBN_mod_exp(S,  M,  d, n, ctx);\nBN_mod_exp(Sb, Mb, d, n, ctx);\n```\n```bash\nmake rsa_lab && ./rsa_lab 4\nsudo rsa-verify 4\n```\nVotre flag est : **`${ANSWER}`**",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "Quelle est l'opération de signature avec les BIGNUMs ?",
+          "content": "`BN_mod_exp(S, M, d, n, ctx)` calcule `M^d mod n`. C'est identique au déchiffrement — la signature RSA brute est symétrique.",
+          "hint_penalty": 5,
+          "order": 0
+        },
+        {
+          "title": "Le vérificateur refuse ma valeur de S",
+          "content": "Vérifiez que vous soumettez la signature du message **$2000** (pas $3000). Copiez la valeur hex brute sans espaces dans task4.txt.",
+          "hint_penalty": 10,
+          "order": 1
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 30,
+      "variant_answers": true,
+      "reference_solution": [],
+      "mitre_techniques": [],
+      "expected_commands": [],
+      "commands_required": false
+    },
+    {
+      "title": "Task 5 — Vérifier une signature RSA",
+      "level_type": "TRAINING_LEVEL",
+      "order": 7,
+      "estimated_duration": 15,
+      "minimal_possible_solve_time": null,
+      "answer": null,
+      "answer_variable_name": "flag_t5_verify",
+      "content": "# Task 5 — Vérifier une signature numérique RSA\n\n## Rappel\nPour vérifier que `S` est bien la signature d'Alice sur `M`, on calcule :\n```\nV = Sᵉ mod n\n```\nSi `V == M` → signature **VALIDE**. Sinon → **INVALIDE**.\n\nCette tâche utilise des paramètres **fixes** (identiques pour tous les sandboxes), tirés du lab SEED original.\n\n## À faire\n1. Trouvez la section **TASK 5** dans `rsa_lab.c` (les valeurs de M, e, n, S et S' sont déjà renseignées).\n2. Décommentez les deux `BN_mod_exp(...)`.\n3. Compilez et exécutez :\n   ```\n   make rsa_lab && ./rsa_lab 5\n   ```\n4. Le programme affiche le résultat pour `S` (signature originale) et `S'` (corrompue, dernier octet 0x2F→0x3F).\n5. Écrivez **deux lignes** dans `~/rsalab/answers/task5.txt` :\n   ```\n   VALID\n   INVALID\n   ```\n   (ou ce que vous observez réellement)\n6. Obtenez votre flag :\n   ```\n   sudo rsa-verify 5\n   ```\n\n## Pour votre rapport\n**Q8.** Que se passe-t-il lorsque la signature est corrompue d'un seul bit ? Expliquez pourquoi le résultat est si radicalement différent du message original.\n**Q9.** Si un attaquant modifie le message après signature, peut-il recalculer une signature valide sans la clé privée d'Alice ? Pourquoi ?",
+      "solution": "```c\n// Les valeurs sont déjà dans le code (section TASK 5) :\n// M  = \"Launch a missile.\"  S = 643D...2F  S' = 643D...3F\nBN_mod_exp(V, S,  e, n, ctx);  // → comparer avec M\nBN_mod_exp(V, Sc, e, n, ctx);  // → comparer avec M\n```\n```bash\nmake rsa_lab && ./rsa_lab 5\n# Écrire dans task5.txt :  VALID\\nINVALID\nsudo rsa-verify 5\n```\nVotre flag est : **`${ANSWER}`**",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "Comment comparer V et M avec les BIGNUMs ?",
+          "content": "Après `BN_mod_exp(V, S, e, n, ctx)`, utilisez `BN_cmp(V, M)` : retourne 0 si V==M (VALID), sinon ≠0 (INVALID). Le code starter inclut déjà un `printf` conditionnel.",
+          "hint_penalty": 5,
+          "order": 0
+        },
+        {
+          "title": "Format attendu dans task5.txt",
+          "content": "Le fichier doit contenir exactement deux lignes en majuscules :\nLigne 1 : résultat pour S original\nLigne 2 : résultat pour S corrompu\nExemple : VALID\\nINVALID",
+          "hint_penalty": 10,
+          "order": 1
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 30,
+      "variant_answers": true,
+      "reference_solution": [],
+      "mitre_techniques": [],
+      "expected_commands": [],
+      "commands_required": false
+    },
+    {
+      "title": "Task 6 — Vérifier manuellement un certificat X.509",
+      "level_type": "TRAINING_LEVEL",
+      "order": 8,
+      "estimated_duration": 20,
+      "minimal_possible_solve_time": null,
+      "answer": null,
+      "answer_variable_name": "flag_t6_cert",
+      "content": "# Task 6 — Vérifier manuellement un certificat X.509\n\n## Principe\nUn certificat X.509 est signé par une Autorité de Certification (CA). La vérification manuelle se fait en 4 étapes :\n1. Extraire la signature `S` du certificat serveur (`c0.pem`)\n2. Extraire la clé publique `(e, n)` du certificat CA (`c1.pem`)\n3. Calculer `V = Sᵉ mod n` avec votre programme C\n4. Calculer le SHA-256 du corps du certificat et comparer avec `V`\n\nVos certificats sont dans `~/rsalab/task6/` (uniques pour votre sandbox).\n\n## Étapes OpenSSL\n\n### Étape 1 — Extraire la clé publique du CA (c1.pem)\n```bash\nopenssl x509 -in ~/rsalab/task6/c1.pem -noout -modulus   # → n (hex)\nopenssl x509 -in ~/rsalab/task6/c1.pem -text -noout       # → e (cherchez \"Exponent:\")\n```\n\n### Étape 2 — Extraire la signature du certificat serveur (c0.pem)\n```bash\nopenssl x509 -in ~/rsalab/task6/c0.pem -text -noout\n# → copier le bloc hexadécimal après \"Signature Algorithm: sha256WithRSAEncryption\"\n# → supprimer espaces et \":\" :\ncat signature.txt | tr -d '[:space:]:'\n```\n\n### Étape 3 — Calculer le SHA-256 du corps du certificat\n```bash\nopenssl asn1parse -i -in ~/rsalab/task6/c0.pem -strparse 4 -out /tmp/c0_body.bin -noout\nsha256sum /tmp/c0_body.bin\n```\n\n### Étape 4 — Vérifier avec votre programme C\nModifiez la section **TASK 6** dans `rsa_lab.c` : collez les valeurs extraites, décommentez `BN_mod_exp`, compilez et exécutez `./rsa_lab 6`. Comparez les 64 derniers caractères hex de V avec le hash SHA-256.\n\n## À faire pour le flag\n1. Exécutez `sha256sum /tmp/c0_body.bin`\n2. Copiez le hash (64 hex chars) dans `~/rsalab/answers/task6.txt`\n3. Obtenez votre flag :\n   ```\n   sudo rsa-verify 6\n   ```\n\n## Pour votre rapport\n**Q10.** Pourquoi le résultat de `Sᵉ mod n` ne donne-t-il pas directement le SHA-256 ? Qu'y a-t-il de plus (structure ASN.1 / PKCS#1) ?\n**Q11.** Quelle est la différence entre un certificat auto-signé (Root CA) et un certificat signé par une CA intermédiaire ?",
+      "solution": "```bash\n# Extraire n du CA :\nopenssl x509 -in ~/rsalab/task6/c1.pem -noout -modulus\n# Extraire e :\nopenssl x509 -in ~/rsalab/task6/c1.pem -text -noout | grep Exponent\n# Extraire signature de c0 et nettoyer :\nopenssl x509 -in ~/rsalab/task6/c0.pem -text -noout | grep -A100 \"Signature Value\" | tr -d '[:space:]:'\n# Corps du cert :\nopenssl asn1parse -i -in ~/rsalab/task6/c0.pem -strparse 4 -out /tmp/c0_body.bin -noout\nsha256sum /tmp/c0_body.bin   # → copier dans answers/task6.txt\nsudo rsa-verify 6\n```\nVotre flag est : **`${ANSWER}`**",
+      "solution_penalized": true,
+      "hints": [
+        {
+          "title": "Comment extraire proprement la signature de c0.pem ?",
+          "content": "Utilisez `openssl x509 -in c0.pem -text -noout`, trouvez le bloc hexadécimal après `Signature Algorithm: sha256WithRSAEncryption`. Copiez ce bloc dans un fichier `sig.txt`, puis : `cat sig.txt | tr -d '[:space:]:' > sig_hex.txt`. Le premier octet (souvent `00`) peut être ignoré dans BN_hex2bn.",
+          "hint_penalty": 5,
+          "order": 0
+        },
+        {
+          "title": "Quelle commande extrait le corps du certificat (sans la signature) ?",
+          "content": "`openssl asn1parse -i -in ~/rsalab/task6/c0.pem -strparse 4 -out /tmp/c0_body.bin -noout` extrait le corps TBSCertificate (offset 4 dans la structure ASN.1 DER). Calculez ensuite son SHA-256 avec `sha256sum /tmp/c0_body.bin`.",
+          "hint_penalty": 10,
+          "order": 1
+        },
+        {
+          "title": "Le vérificateur dit que mon hash ne correspond pas",
+          "content": "Vérifiez que vous utilisez bien `c0.pem` (certificat serveur) pour l'extraction du corps, et `c1.pem` (certificat CA) pour la clé publique. Les deux fichiers doivent exister dans `~/rsalab/task6/`. Re-exécutez la commande `sha256sum` et copiez uniquement les 64 hex chars (sans le nom de fichier).",
+          "hint_penalty": 20,
+          "order": 2
+        }
+      ],
+      "incorrect_answer_limit": 10,
+      "attachments": [],
+      "max_score": 20,
+      "variant_answers": true,
+      "reference_solution": [],
+      "mitre_techniques": [],
+      "expected_commands": [],
+      "commands_required": false
+    },
+    {
+      "title": "Quiz final — compréhension théorique",
+      "level_type": "ASSESSMENT_LEVEL",
+      "order": 9,
+      "estimated_duration": 10,
+      "minimal_possible_solve_time": null,
+      "questions": [
+        {
+          "question_type": "MCQ",
+          "text": "Dans RSA, que représente φ(n) et comment est-il calculé ?",
+          "points": 5,
+          "penalty": 0,
+          "order": 0,
+          "answer_required": true,
+          "choices": [
+            {
+              "text": "φ(n) est la fonction d'Euler, qui vaut (p-1)(q-1) pour n=p×q — c'est le nombre d'entiers premiers avec n",
+              "correct": true,
+              "order": 0
+            },
+            {
+              "text": "φ(n) = p+q — il s'agit de la somme des deux premiers",
+              "correct": false,
+              "order": 1
+            },
+            {
+              "text": "φ(n) = n-1 — tous les entiers jusqu'à n sont premiers avec n",
+              "correct": false,
+              "order": 2
+            },
+            {
+              "text": "φ(n) = p×q/2 — la moitié du module",
+              "correct": false,
+              "order": 3
+            }
+          ]
+        },
+        {
+          "question_type": "MCQ",
+          "text": "Pourquoi la clé privée d est-elle difficile à retrouver connaissant uniquement (e, n) ?",
+          "points": 5,
+          "penalty": 0,
+          "order": 1,
+          "answer_required": true,
+          "choices": [
+            {
+              "text": "BN_mod_inverse est une fonction à sens unique irréversible",
+              "correct": false,
+              "order": 0
+            },
+            {
+              "text": "d est stocké de façon chiffrée dans le certificat X.509",
+              "correct": false,
+              "order": 1
+            },
+            {
+              "text": "e et d sont indépendants l'un de l'autre",
+              "correct": false,
+              "order": 2
+            },
+            {
+              "text": "Il faudrait factoriser n pour obtenir p et q et ainsi calculer φ(n) — ce problème est computationnellement infaisable pour des clés de taille suffisante",
+              "correct": true,
+              "order": 3
+            }
+          ]
+        },
+        {
+          "question_type": "MCQ",
+          "text": "Que calcule BN_mod_exp(res, M, e, n, ctx) et quel usage RSA cela correspond-il ?",
+          "points": 5,
+          "penalty": 0,
+          "order": 2,
+          "answer_required": true,
+          "choices": [
+            {
+              "text": "res = M + e mod n — addition modulaire",
+              "correct": false,
+              "order": 0
+            },
+            {
+              "text": "res = e^M mod n — exponentiation de l'exposant par le message",
+              "correct": false,
+              "order": 1
+            },
+            {
+              "text": "res = Mᵉ mod n — c'est l'opération de chiffrement RSA avec la clé publique (e, n)",
+              "correct": true,
+              "order": 2
+            },
+            {
+              "text": "res = e × M mod n — multiplication modulaire simple",
+              "correct": false,
+              "order": 3
+            }
+          ]
+        },
+        {
+          "question_type": "MCQ",
+          "text": "Pourquoi deux messages qui diffèrent d'un seul caractère produisent-ils des signatures RSA totalement différentes ?",
+          "points": 5,
+          "penalty": 0,
+          "order": 3,
+          "answer_required": true,
+          "choices": [
+            {
+              "text": "Le module n change à chaque appel",
+              "correct": false,
+              "order": 0
+            },
+            {
+              "text": "RSA est une exponentiation modulaire — une infime différence d'entrée modifie complètement la sortie, propriété essentielle des primitives cryptographiques",
+              "correct": true,
+              "order": 1
+            },
+            {
+              "text": "RSA utilise un sel aléatoire à chaque signature",
+              "correct": false,
+              "order": 2
+            },
+            {
+              "text": "La bibliothèque OpenSSL ajoute un padding OAEP qui varie",
+              "correct": false,
+              "order": 3
+            }
+          ]
+        },
+        {
+          "question_type": "MCQ",
+          "text": "Lors de la vérification d'un certificat X.509, pourquoi calcule-t-on SHA-256 sur le 'corps' du certificat (TBSCertificate) et non sur le fichier complet ?",
+          "points": 5,
+          "penalty": 0,
+          "order": 4,
+          "answer_required": true,
+          "choices": [
+            {
+              "text": "La signature est calculée sur le corps uniquement (sans elle-même) — inclure la signature dans son propre calcul créerait une dépendance circulaire impossible",
+              "correct": true,
+              "order": 0
+            },
+            {
+              "text": "SHA-256 ne peut pas traiter des fichiers PEM encodés en base64",
+              "correct": false,
+              "order": 1
+            },
+            {
+              "text": "Le fichier complet contient des données privées à ne pas hacher",
+              "correct": false,
+              "order": 2
+            },
+            {
+              "text": "OpenSSL ne supporte que les hachages de moins de 1 Ko",
+              "correct": false,
+              "order": 3
+            }
+          ]
+        },
+        {
+          "question_type": "MCQ",
+          "text": "Qu'est-ce qu'un certificat X.509 et quel problème résout-il ?",
+          "points": 5,
+          "penalty": 0,
+          "order": 5,
+          "answer_required": true,
+          "choices": [
+            {
+              "text": "C'est un fichier chiffré contenant la clé privée d'un serveur",
+              "correct": false,
+              "order": 0
+            },
+            {
+              "text": "C'est un protocole réseau pour l'échange de clés symétrique",
+              "correct": false,
+              "order": 1
+            },
+            {
+              "text": "C'est une norme de compression pour réduire la taille des clés RSA",
+              "correct": false,
+              "order": 2
+            },
+            {
+              "text": "C'est un document signé par une CA qui lie une clé publique à une identité — il résout le problème de l'authentification des clés publiques (comment savoir que la clé appartient vraiment à qui elle prétend ?)",
+              "correct": true,
+              "order": 3
+            }
+          ]
+        }
+      ],
+      "instructions": "6 questions, 5 points chacune (= 0,5 / 20 chacune). Répondez à partir de ce que vous avez fait dans le lab.",
+      "assessment_type": "TEST"
+    },
+    {
+      "title": "Débriefing et rapport de TP",
+      "level_type": "INFO_LEVEL",
+      "order": 10,
+      "estimated_duration": 0,
+      "minimal_possible_solve_time": null,
+      "content": "# Bravo !\n\nVous avez implémenté de bout en bout l'algorithme RSA en C : génération de la clé privée, chiffrement, déchiffrement, signature, vérification de signature, et vérification manuelle d'un certificat X.509. Points essentiels à retenir :\n\n* **La sécurité de RSA** repose sur la difficulté de factoriser un grand entier n = p×q. Avec des clés de 128 bits comme dans ce lab, ce serait trivial — en pratique on utilise au minimum 2048 bits.\n* **La bibliothèque OpenSSL BigNum** permet de manipuler des entiers arbitrairement grands en C, rendant l'algorithme implémentable sans bibliothèque cryptographique de haut niveau.\n* **Un seul bit modifié** dans une signature ou un chiffré produit un résultat totalement différent — c'est la propriété d'avalanche, fondamentale en cryptographie.\n* **Les certificats X.509** ne sont pas de la magie : ce sont des structures ASN.1 signées avec RSA (ou ECDSA). Vous venez de vérifier l'un d'eux manuellement.\n\n## Rapport (à remettre à votre enseignant)\nDécrivez chaque tâche avec **screenshots** (compilation, exécution, résultat de `rsa-verify`) et **explications de code** (chaque appel BN_ utilisé, avec sa signification mathématique). Répondez aux questions Q0–Q11. Code sans explication = 0 crédit."
+    }
+  ],
+  "estimated_duration": 120,
+  "variant_sandboxes": true
+}

@@ -1,0 +1,12 @@
+rsa_user: ubuntu
+rsa_lab_dir: "/home/{{ rsa_user }}/rsalab"
+rsa_secrets_dir: /opt/rsalab
+
+# Per-sandbox flags (set by playbook from variables.yml / APG)
+flag_t0: ""
+flag_t1: ""
+flag_t2: ""
+flag_t3: ""
+flag_t4: ""
+flag_t5: ""
+flag_t6: ""
